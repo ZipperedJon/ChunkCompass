@@ -111,6 +111,21 @@ BIOME_NAMES: dict[int, str] = {
 }
 
 
+# Reverse lookup and a sorted list for UI (name, id), de-duplicated by name.
+_seen = set()
+BIOME_CHOICES = []
+for _bid, _name in sorted(BIOME_NAMES.items(), key=lambda kv: kv[1]):
+    if _bid < 0 or _name in _seen:
+        continue
+    _seen.add(_name)
+    BIOME_CHOICES.append((_name, _bid))
+BIOME_NAME_TO_ID = {name.lower(): bid for name, bid in BIOME_CHOICES}
+
+
+def biome_id_from_name(name: str):
+    return BIOME_NAME_TO_ID.get((name or "").strip().lower())
+
+
 def biome_name(bid: int) -> str:
     if bid in BIOME_NAMES:
         return BIOME_NAMES[bid]

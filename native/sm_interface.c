@@ -12,6 +12,7 @@
 #include "finders.h"
 #include "biomenoise.h"
 #include <stdint.h>
+#include <stdlib.h>
 
 #if defined(_WIN32)
 #define EXPORT __declspec(dllexport)
@@ -152,6 +153,91 @@ EXPORT int sm_fill_heights(int mc, uint64_t seed, int dim, int x0, int z0,
         }
     }
     return 0;
+}
+
+/* Find overworld strongholds (up to maxout, in generation order). Writes (x,z)
+ * block pairs to out; returns the number written. */
+EXPORT int sm_find_strongholds(int mc, uint64_t seed, int maxout, int *out)
+{
+    Generator g;
+    setupGenerator(&g, mc, 0);
+    applySeed(&g, DIM_OVERWORLD, seed);
+    StrongholdIter sh;
+    initFirstStronghold(&sh, mc, seed);
+    int count = 0;
+    while (count < maxout)
+    {
+        int more = nextStronghold(&sh, &g);
+        out[2 * count] = sh.pos.x;
+        out[2 * count + 1] = sh.pos.z;
+        count++;
+        if (more <= 0)
+            break;
+    }
+    return count;
+}
+
+/* Find mineshaft chunks within a block area. Writes (x,z) pairs to out; returns
+ * the number found (or -1 if the area spans too many chunks). */
+EXPORT int sm_find_mineshafts(int mc, uint64_t seed,
+        int x0, int z0, int x1, int z1, int *out, int maxout)
+{
+    int cx0 = x0 >> 4, cz0 = z0 >> 4, cx1 = x1 >> 4, cz1 = z1 >> 4;
+    int cw = cx1 - cx0 + 1, ch = cz1 - cz0 + 1;
+    if (cw < 1 || ch < 1)
+        return 0;
+    if ((long long)cw * ch > 200000)
+        return -1;
+    Pos *buf = (Pos *)malloc(sizeof(Pos) * (maxout > 0 ? maxout : 1));
+    if (!buf)
+        return 0;
+    int n = getMineshafts(mc, seed, cx0, cz0, cw, ch, buf, maxout);
+    int m = n < maxout ? n : maxout;
+    for (int i = 0; i < m; i++)
+    {
+        out[2 * i] = buf[i].x;
+        out[2 * i + 1] = buf[i].z;
+    }
+    free(buf);
+    return n;
+}
+
+/* Nearest block (coarse grid) whose biome == target, searching outward from
+ * (cx,cz) up to maxradius in steps of `step`. Writes (x,z) to out; returns 1 if
+ * found, else 0. */
+EXPORT int sm_nearest_biome(int mc, uint64_t seed, int dim, int y,
+        int cx, int cz, int target, int maxradius, int step, int *out)
+{
+    Generator g;
+    setupGenerator(&g, mc, 0);
+    applySeed(&g, dim, seed);
+    if (step < 1)
+        step = 1;
+    long long bestd = -1;
+    int bx = 0, bz = 0, found = 0;
+    for (int dx = -maxradius; dx <= maxradius; dx += step)
+    {
+        for (int dz = -maxradius; dz <= maxradius; dz += step)
+        {
+            int x = cx + dx, z = cz + dz;
+            if (getBiomeAt(&g, 1, x, y, z) != target)
+                continue;
+            long long d = (long long)dx * dx + (long long)dz * dz;
+            if (!found || d < bestd)
+            {
+                bestd = d;
+                bx = x;
+                bz = z;
+                found = 1;
+            }
+        }
+    }
+    if (found)
+    {
+        out[0] = bx;
+        out[1] = bz;
+    }
+    return found;
 }
 
 /* Approximate world spawn (fast). Writes {x, z} to out. */

@@ -71,6 +71,7 @@ class MapCanvas(tk.Frame):
 
         self._drag_start = None
         self._dragged = False
+        self._flash = None       # (x, z) world point to highlight after a search
 
         c = self.canvas
         c.bind("<ButtonPress-1>", self._on_press)
@@ -153,9 +154,16 @@ class MapCanvas(tk.Frame):
     # ------------------------------------------------------------------ #
     # Events
     # ------------------------------------------------------------------ #
+    def flash_at(self, x, z):
+        self._flash = (x, z)
+        self.redraw()
+
     def _on_press(self, event):
         self._drag_start = (event.x, event.y, self.center_x, self.center_z)
         self._dragged = False
+        if self._flash is not None:
+            self._flash = None
+            self.redraw()
 
     def _on_drag(self, event):
         if not self._drag_start:
@@ -288,6 +296,15 @@ class MapCanvas(tk.Frame):
         self._draw_grid(w, h)
         self._draw_structures()
         self._draw_waypoints()
+        self._draw_flash()
+
+    def _draw_flash(self):
+        if self._flash is None:
+            return
+        sx, sy = self.world_to_screen(*self._flash)
+        for r in (18, 12, 6):
+            self.canvas.create_oval(sx - r, sy - r, sx + r, sy + r,
+                                    outline=SELECT_COLOR, width=2)
 
     def _draw_biome(self, w, h):
         if not (self._biome_enabled and self._bg):

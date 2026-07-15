@@ -95,6 +95,42 @@ def _plus(d, c):
     d.line([8, 11, 14, 11], fill=c, width=2)
 
 
+def _chest(d, c):
+    d.rectangle([5, 8, 17, 17], fill=c)
+    d.rectangle([5, 8, 17, 11], fill=c, outline="#0b1119")
+    d.rectangle([10, 10, 12, 13], fill="#0b1119")   # latch
+
+
+def _pick(d, c):
+    d.line([5, 16, 16, 5], fill=c, width=2)          # handle
+    d.arc([9, 3, 19, 11], 200, 20, fill=c, width=2)  # head
+
+
+def _eye(d, c):
+    d.ellipse([5, 7, 17, 15], fill=c)
+    d.ellipse([9, 9, 13, 13], fill="#0b2f18")        # pupil
+
+
+def _arch(d, c):
+    d.rectangle([5, 9, 8, 18], fill=c)
+    d.rectangle([14, 9, 17, 18], fill=c)
+    d.rectangle([5, 6, 17, 9], fill=c)               # lintel
+
+
+def _bricks(d, c):
+    d.rectangle([5, 6, 17, 17], fill=c, outline="#0b1119")
+    d.line([5, 11, 17, 11], fill="#0b1119")
+    d.line([11, 6, 11, 11], fill="#0b1119")
+    d.line([8, 11, 8, 17], fill="#0b1119")
+    d.line([14, 11, 14, 17], fill="#0b1119")
+
+
+def _spire(d, c):
+    d.polygon([(11, 3), (14, 8), (8, 8)], fill=c)    # spire top
+    d.rectangle([8, 8, 14, 18], fill=c)              # tower
+    d.rectangle([10, 12, 12, 18], fill="#0b1119")    # door
+
+
 _GLYPHS = {
     "village":   lambda d, c: _house(d, c),
     "outpost":   lambda d, c: _tower(d, c),
@@ -110,6 +146,13 @@ _GLYPHS = {
     "city":      lambda d, c: _diamond(d, c),
     "trail":     lambda d, c: _trail(d, c),
     "trial":     lambda d, c: _plus(d, c),
+    "treasure":  lambda d, c: _chest(d, c),
+    "mineshaft": lambda d, c: _pick(d, c),
+    "stronghold": lambda d, c: _eye(d, c),
+    "fortress":  lambda d, c: _arch(d, c),
+    "bastion":   lambda d, c: _bricks(d, c),
+    "portal_n":  lambda d, c: _portal(d, c),
+    "endcity":   lambda d, c: _spire(d, c),
 }
 
 

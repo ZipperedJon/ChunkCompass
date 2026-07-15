@@ -13,10 +13,16 @@ waypoints to CSV or a nicely formatted Markdown note with a table.
 - ⛰️ **Terrain shading** — hillshaded relief from approximate surface heights (1.18+)
 - 🕳️ **Depth selector** — view biomes at the Surface, Underground (y=0), or Bottom (y=-51)
 - 🏛️ **Structure finder** — villages, temples, monuments, mansions, outposts,
-  ancient cities, trial chambers and more, each with its own icon. Click icons in
-  the side panel to toggle types on/off; click a structure on the map to add a
-  waypoint or mark it explored
-- 🧭 **Version picker** — Minecraft **1.7 through 1.21** (the newest cubiomes models)
+  ancient cities, trial chambers, buried treasure, strongholds, mineshafts,
+  nether fortresses, bastions, end cities and more, each with its own icon. Click
+  icons in the side panel to toggle types on/off; click a structure on the map to
+  add a waypoint or mark it explored
+- 🌐 **Dimension switcher** — Overworld / Nether / End (biomes, structures, and
+  new waypoints follow the selected dimension)
+- 🔎 **Search** — jump to the nearest structure or biome by name
+- ✨ **Biome highlight** — multi-select biomes to spotlight them (others dimmed)
+- 🧭 **Version picker** — Minecraft **Beta 1.7 through the latest** (newer than
+  1.21.4 uses that generation, since world-gen has been stable since 1.18)
 - 📍 **Custom waypoints** — name, X/Y/Z, dimension, category, colour, and notes
 - 💾 **Save/Load** your map as a `.msf` file (self-describing JSON under the hood)
 - 📤 **Export** all waypoints to **CSV** or a **Markdown note** with a table

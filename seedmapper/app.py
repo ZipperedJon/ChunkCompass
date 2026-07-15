@@ -8,12 +8,15 @@ from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from PIL import ImageTk
 
-from . import __app_name__, __version__, biomes, engine, exporters, icons, msf
+from . import __app_name__, __version__, biomes, colors, engine, exporters, icons, msf
 from .colors import biome_name
 from .mapcanvas import MapCanvas
 from .model import DIMENSIONS, Project, Waypoint
 
 MSF_FILETYPES = [("Minecraft Seed Map", "*.msf"), ("All files", "*.*")]
+
+DIMENSION_CHOICES = ["Overworld", "Nether", "End"]
+DIMENSION_KEY = {"Overworld": "overworld", "Nether": "nether", "End": "end"}
 
 
 class WaypointDialog(tk.Toplevel):
@@ -124,8 +127,8 @@ class WaypointDialog(tk.Toplevel):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.geometry("1180x760")
-        self.minsize(860, 560)
+        self.geometry("1240x880")
+        self.minsize(900, 620)
 
         self.project = Project()
         self.current_path: Path | None = None
@@ -143,6 +146,9 @@ class App(tk.Tk):
         self._structures_var = tk.BooleanVar(value=True)
         self._struct_enabled = {
             s["key"]: tk.BooleanVar(value=s["on"]) for s in engine.STRUCTURES}
+        self._dimension_var = tk.StringVar(value="Overworld")
+        self._highlight_ids: set = set()
+        self._search_hint = tk.StringVar(value="")
 
         self._build_menu()
         self._build_toolbar()
@@ -213,34 +219,51 @@ class App(tk.Tk):
         ttk.Label(bar, text="Version:").pack(side="left")
         self._version_combo = ttk.Combobox(
             bar, textvariable=self._version_var, values=engine.VERSION_LABELS,
-            width=15, state="readonly")
-        self._version_combo.pack(side="left", padx=(4, 12))
+            width=14, state="readonly")
+        self._version_combo.pack(side="left", padx=(4, 10))
         self._version_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_seed_version())
 
-        ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=8)
+        ttk.Label(bar, text="Dimension:").pack(side="left")
+        self._dim_combo = ttk.Combobox(
+            bar, textvariable=self._dimension_var, values=DIMENSION_CHOICES,
+            width=10, state="readonly")
+        self._dim_combo.pack(side="left", padx=(4, 10))
+        self._dim_combo.bind("<<ComboboxSelected>>", lambda e: self._change_dimension())
+
+        ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=6)
 
         self._add_btn = ttk.Checkbutton(
             bar, text="Add waypoint (click map)", variable=self._add_var,
             style="Toolbutton", command=self._toggle_add_mode)
         self._add_btn.pack(side="left", padx=4)
         self._biome_chk = ttk.Checkbutton(
-            bar, text="Biomes", variable=self._biome_var,
-            style="Toolbutton", command=self._toggle_biomes)
+            bar, text="Biomes", variable=self._biome_var, command=self._toggle_biomes)
         self._biome_chk.pack(side="left", padx=4)
         self._terrain_chk = ttk.Checkbutton(
-            bar, text="Terrain", variable=self._terrain_var,
-            style="Toolbutton", command=self._toggle_terrain)
+            bar, text="Terrain", variable=self._terrain_var, command=self._toggle_terrain)
         self._terrain_chk.pack(side="left", padx=4)
 
         ttk.Label(bar, text="Depth:").pack(side="left", padx=(8, 2))
         self._depth_combo = ttk.Combobox(
             bar, textvariable=self._depth_var, values=biomes.DEPTH_LABELS,
-            width=16, state="readonly")
+            width=15, state="readonly")
         self._depth_combo.pack(side="left", padx=(0, 8))
         self._depth_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_depth())
 
-        ttk.Button(bar, text="Spawn", command=self._goto_spawn).pack(side="left", padx=4)
-        ttk.Button(bar, text="Home", command=lambda: self.map.go_home()).pack(side="left", padx=4)
+        ttk.Button(bar, text="Home", command=lambda: self.map.go_home()).pack(side="right", padx=4)
+        ttk.Button(bar, text="Spawn", command=self._goto_spawn).pack(side="right", padx=4)
+
+        # Second row: search.
+        bar2 = ttk.Frame(self, padding=(8, 0, 8, 6))
+        bar2.pack(side="top", fill="x")
+        ttk.Label(bar2, text="Search structure or biome:").pack(side="left")
+        self._search_var = tk.StringVar()
+        entry = ttk.Entry(bar2, textvariable=self._search_var, width=28)
+        entry.pack(side="left", padx=(4, 4))
+        entry.bind("<Return>", lambda e: self._do_search())
+        ttk.Button(bar2, text="Find nearest", command=self._do_search).pack(side="left")
+        ttk.Label(bar2, textvariable=self._search_hint, foreground="#7f909e",
+                  font=("Segoe UI", 8)).pack(side="left", padx=8)
 
     def _build_body(self):
         paned = ttk.PanedWindow(self, orient="horizontal")
@@ -251,7 +274,7 @@ class App(tk.Tk):
 
         ttk.Label(left, text="Waypoints", font=("Segoe UI", 10, "bold")).pack(anchor="w")
         cols = ("name", "x", "z", "dim")
-        self.tree = ttk.Treeview(left, columns=cols, show="headings", height=14,
+        self.tree = ttk.Treeview(left, columns=cols, show="headings", height=7,
                                  selectmode="browse")
         for c, t, w, anc in (("name", "Name", 130, "w"), ("x", "X", 54, "e"),
                              ("z", "Z", 54, "e"), ("dim", "Dim", 66, "w")):
@@ -269,6 +292,7 @@ class App(tk.Tk):
         ttk.Button(left, text="Go to on map", command=self._goto_selected).pack(fill="x", pady=(6, 0))
 
         self._build_legend(left)
+        self._build_highlight(left)
 
         self.map = MapCanvas(paned)
         paned.add(self.map, weight=1)
@@ -318,6 +342,118 @@ class App(tk.Tk):
             self._struct_cells[key] = (iconlbl, txtlbl)
             self._update_struct_cell(key)
 
+    def _build_highlight(self, parent):
+        lf = ttk.LabelFrame(parent, text="Highlight biomes", padding=(6, 4))
+        lf.pack(fill="both", expand=True, pady=(10, 0))
+        row = ttk.Frame(lf)
+        row.pack(fill="x")
+        ttk.Label(row, text="select to highlight", font=("Segoe UI", 7),
+                  foreground="#7f909e").pack(side="left")
+        ttk.Button(row, text="Clear", width=6, command=self._clear_highlight).pack(side="right")
+        box = ttk.Frame(lf)
+        box.pack(fill="both", expand=True, pady=(3, 0))
+        sb = ttk.Scrollbar(box, orient="vertical")
+        self._biome_list = tk.Listbox(box, selectmode="extended", height=6,
+                                      exportselection=False, activestyle="none",
+                                      yscrollcommand=sb.set)
+        sb.config(command=self._biome_list.yview)
+        sb.pack(side="right", fill="y")
+        self._biome_list.pack(side="left", fill="both", expand=True)
+        self._biome_choice_ids = []
+        for name, bid in colors.BIOME_CHOICES:
+            self._biome_list.insert("end", name)
+            self._biome_choice_ids.append(bid)
+        self._biome_list.bind("<<ListboxSelect>>", lambda e: self._on_highlight_select())
+
+    def _on_highlight_select(self):
+        sel = self._biome_list.curselection()
+        self._highlight_ids = {self._biome_choice_ids[i] for i in sel}
+        if self._biome_var.get():
+            self._apply_biome_layer()
+
+    def _clear_highlight(self):
+        self._biome_list.selection_clear(0, "end")
+        self._highlight_ids = set()
+        if self._biome_var.get():
+            self._apply_biome_layer()
+
+    # -- search -------------------------------------------------------- #
+    def _do_search(self):
+        if not self._engine_available:
+            return
+        q = self._search_var.get().strip()
+        if not q:
+            return
+        ql = q.lower()
+
+        # Priority: exact biome, exact structure, substring structure, substring biome.
+        exact_biome = colors.biome_id_from_name(q)
+        exact_struct = next((s for s in engine.STRUCTURES if s["label"].lower() == ql), None)
+        if exact_biome is not None and exact_struct is None:
+            return self._go_biome(exact_biome)
+        if exact_struct is not None:
+            return self._go_structure(exact_struct)
+        sub_struct = next((s for s in engine.STRUCTURES if ql in s["label"].lower()), None)
+        if sub_struct is not None:
+            return self._go_structure(sub_struct)
+        sub_biome = next(((n, b) for n, b in colors.BIOME_CHOICES if ql in n.lower()), None)
+        if sub_biome is not None:
+            return self._go_biome(sub_biome[1])
+        self._search_hint.set("No matching structure or biome")
+
+    def _go_structure(self, sdef):
+        if sdef["dim"] != self._dim():
+            label = next(k for k, v in DIMENSION_KEY.items() if v == sdef["dim"])
+            self._dimension_var.set(label)
+            self._change_dimension()
+        cx, cz = int(round(self.map.center_x)), int(round(self.map.center_z))
+        pos = self._nearest_structure(sdef, cx, cz)
+        if pos:
+            self.map.center_on(*pos)
+            self.map.flash_at(*pos)
+            self._search_hint.set(f"{sdef['label']}: {pos[0]}, {pos[1]}")
+        else:
+            self._search_hint.set(f"No {sdef['label']} found within range")
+
+    def _go_biome(self, bid):
+        cx, cz = int(round(self.map.center_x)), int(round(self.map.center_z))
+        pos = engine.nearest_biome(self.project.mc_version, self.project.seed,
+                                   self._dim(), cx, cz, bid,
+                                   y=biomes.depth_y(self._depth_var.get()))
+        if pos:
+            self.map.center_on(*pos)
+            self.map.flash_at(*pos)
+            self._search_hint.set(f"{biome_name(bid)}: {pos[0]}, {pos[1]}")
+        else:
+            self._search_hint.set(f"No {biome_name(bid)} within range")
+
+    def _nearest_structure(self, sdef, cx, cz):
+        mc, seed = self.project.mc_version, self.project.seed
+        finder = sdef.get("finder", "region")
+        if finder == "stronghold":
+            res = engine.find_strongholds(mc, seed, cx - 10_000_000, cz - 10_000_000,
+                                          cx + 10_000_000, cz + 10_000_000)
+            return self._closest(res, cx, cz)
+        for r in (2000, 5000, 12000, 30000, 80000):
+            x0, z0, x1, z1 = cx - r, cz - r, cx + r, cz + r
+            if finder == "mineshaft":
+                res = engine.find_mineshafts(mc, seed, x0, z0, x1, z1)
+            else:
+                res = engine.find_structures(sdef["type"], mc, seed, sdef["dim"],
+                                             x0, z0, x1, z1)
+            if res == engine.TOO_BROAD or not res:
+                continue
+            best = self._closest(res, cx, cz)
+            if best:
+                return best
+        return None
+
+    @staticmethod
+    def _closest(res, cx, cz):
+        if not res or res == engine.TOO_BROAD:
+            return None
+        return min(res, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cz) ** 2)
+
     def _update_struct_cell(self, key):
         on = self._struct_enabled[key].get()
         iconlbl, txtlbl = self._struct_cells[key]
@@ -363,12 +499,21 @@ class App(tk.Tk):
                 "World-gen engine unavailable - running as grid + waypoint mapper. "
                 f"({engine.load_error()})")
 
+    def _dim(self):
+        return DIMENSION_KEY.get(self._dimension_var.get(), "overworld")
+
     def _make_provider(self):
-        p = biomes.get_provider(self.project.seed, self.project.mc_version)
+        p = biomes.get_provider(self.project.seed, self.project.mc_version, self._dim())
         if p is not None:
             p.depth = self._depth_var.get()
-            p.terrain = self._terrain_var.get()
+            p.terrain = self._terrain_var.get() and self._dim() == "overworld"
+            p.highlight = set(self._highlight_ids)
         return p
+
+    def _change_dimension(self):
+        self._apply_biome_layer()
+        self._refresh_structures()
+        self._status_var.set(f"Dimension: {self._dimension_var.get()}")
 
     def _apply_biome_layer(self):
         if not self._engine_available:
@@ -432,14 +577,21 @@ class App(tk.Tk):
         if not (self._engine_available and self._structures_var.get()):
             self.map.set_structures([])
             return
-        x0, z0, x1, z1 = self.map.view_bounds()
+        dim = self._dim()
+        x0, z0, x1, z1 = [int(v) for v in self.map.view_bounds()]
+        mc, seed = self.project.mc_version, self.project.seed
         markers, too_broad = [], False
         for sdef in engine.STRUCTURES:
-            if not self._struct_enabled[sdef["key"]].get():
+            if sdef["dim"] != dim or not self._struct_enabled[sdef["key"]].get():
                 continue
-            res = engine.find_structures(
-                sdef["type"], self.project.mc_version, self.project.seed,
-                sdef["dim"], int(x0), int(z0), int(x1), int(z1))
+            finder = sdef.get("finder", "region")
+            if finder == "stronghold":
+                res = engine.find_strongholds(mc, seed, x0, z0, x1, z1)
+            elif finder == "mineshaft":
+                res = engine.find_mineshafts(mc, seed, x0, z0, x1, z1)
+            else:
+                res = engine.find_structures(sdef["type"], mc, seed, sdef["dim"],
+                                             x0, z0, x1, z1)
             if res == engine.TOO_BROAD:
                 too_broad = True
                 continue
@@ -452,7 +604,7 @@ class App(tk.Tk):
         if too_broad:
             self._status_var.set("Zoom in to load structures (area too large).")
         elif markers:
-            self._status_var.set(f"{len(markers)} structures in view.")
+            self._status_var.set(f"{len(markers)} structures in view ({dim}).")
 
     def _on_structure_click(self, marker, root_x, root_y):
         menu = tk.Menu(self, tearoff=0)
@@ -502,7 +654,7 @@ class App(tk.Tk):
         text = f"X: {xi}, Z: {zi}"
         if self._engine_available:
             bid = engine.biome_at(self.project.mc_version, self.project.seed,
-                                  "overworld", xi, zi)
+                                  self._dim(), xi, zi)
             if bid is not None:
                 text += f"   |   {biome_name(bid)}"
         self._coord_var.set(text)
@@ -512,7 +664,7 @@ class App(tk.Tk):
             self._status_var.set(text)
 
     def _on_map_place(self, x, z):
-        wp = Waypoint(name="Waypoint", x=x, z=z)
+        wp = Waypoint(name="Waypoint", x=x, z=z, dimension=self._dim())
         dlg = WaypointDialog(self, wp, "New waypoint")
         if dlg.result:
             self.project.add(dlg.result)
@@ -533,7 +685,7 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ #
     def _add_waypoint_dialog(self):
         wp = Waypoint(name="Waypoint", x=int(round(self.map.center_x)),
-                      z=int(round(self.map.center_z)))
+                      z=int(round(self.map.center_z)), dimension=self._dim())
         dlg = WaypointDialog(self, wp, "New waypoint")
         if dlg.result:
             self.project.add(dlg.result)

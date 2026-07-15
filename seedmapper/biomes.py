@@ -40,6 +40,7 @@ class BiomeProvider:
         self.dimension = dimension
         self.depth = DEFAULT_DEPTH
         self.terrain = False
+        self.highlight: set = set()   # biome ids to highlight (others dimmed)
         self._cache_key = None
         self._cache_img: Optional[Image.Image] = None
 
@@ -51,8 +52,9 @@ class BiomeProvider:
         rows = max(16, min(320, int(height / 3)))
         y = depth_y(self.depth)
 
+        hl = frozenset(self.highlight)
         key = (round(x0), round(z0), round(x1), round(z1), cols, rows,
-               self.seed, self.mc_version, self.dimension, y, self.terrain)
+               self.seed, self.mc_version, self.dimension, y, self.terrain, hl)
         if key == self._cache_key and self._cache_img is not None:
             return self._cache_img.resize((width, height), Image.NEAREST)
 
@@ -61,7 +63,17 @@ class BiomeProvider:
         if ids is None:
             return None
 
-        colours = [biome_color(b) for b in ids]
+        if hl:
+            colours = []
+            for b in ids:
+                if b in hl:
+                    colours.append(biome_color(b))
+                else:
+                    r, g, b2 = biome_color(b)
+                    v = (int(0.3 * r + 0.59 * g + 0.11 * b2) + 40) // 2
+                    colours.append((v, v, v))
+        else:
+            colours = [biome_color(b) for b in ids]
 
         if self.terrain:
             heights = engine.fill_heights(self.mc_version, self.seed,

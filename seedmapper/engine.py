@@ -164,8 +164,10 @@ class ST:
     Mansion = 9
     Outpost = 10
     Ruined_Portal = 11
+    Ruined_Portal_N = 12
     Ancient_City = 13
     Treasure = 14
+    Mineshaft = 15
     Fortress = 18
     Bastion = 19
     End_City = 20
@@ -173,22 +175,34 @@ class ST:
     Trial_Chambers = 24
 
 
-# key, label, structure type, dimension, colour, short symbol, default-on
+# finder: "region" (getStructurePos), "stronghold", or "mineshaft".
+# key, label, type, dimension, colour, finder, default-on
 STRUCTURES: list[dict] = [
-    {"key": "village",   "label": "Village",          "type": ST.Village,        "dim": "overworld", "color": "#d8b26e", "sym": "V",  "on": True},
-    {"key": "outpost",   "label": "Pillager Outpost", "type": ST.Outpost,        "dim": "overworld", "color": "#c0603a", "sym": "P",  "on": True},
-    {"key": "monument",  "label": "Ocean Monument",   "type": ST.Monument,       "dim": "overworld", "color": "#2fb4c4", "sym": "M",  "on": True},
-    {"key": "mansion",   "label": "Woodland Mansion", "type": ST.Mansion,        "dim": "overworld", "color": "#8b3a2f", "sym": "W",  "on": True},
-    {"key": "desert",    "label": "Desert Pyramid",   "type": ST.Desert_Pyramid, "dim": "overworld", "color": "#e6cf6b", "sym": "D",  "on": True},
-    {"key": "jungle",    "label": "Jungle Temple",    "type": ST.Jungle_Temple,  "dim": "overworld", "color": "#4a8f2f", "sym": "J",  "on": True},
-    {"key": "hut",       "label": "Swamp Hut",        "type": ST.Swamp_Hut,      "dim": "overworld", "color": "#5b7a4a", "sym": "H",  "on": True},
-    {"key": "igloo",     "label": "Igloo",            "type": ST.Igloo,          "dim": "overworld", "color": "#e8f0f4", "sym": "I",  "on": True},
-    {"key": "ruin",      "label": "Ocean Ruin",       "type": ST.Ocean_Ruin,     "dim": "overworld", "color": "#3f9c8f", "sym": "O",  "on": False},
-    {"key": "shipwreck", "label": "Shipwreck",        "type": ST.Shipwreck,      "dim": "overworld", "color": "#9c7a4a", "sym": "S",  "on": False},
-    {"key": "portal",    "label": "Ruined Portal",    "type": ST.Ruined_Portal,  "dim": "overworld", "color": "#9b59b6", "sym": "R",  "on": False},
-    {"key": "city",      "label": "Ancient City",     "type": ST.Ancient_City,   "dim": "overworld", "color": "#3a4a55", "sym": "A",  "on": True},
-    {"key": "trail",     "label": "Trail Ruins",      "type": ST.Trail_Ruins,    "dim": "overworld", "color": "#b08b5e", "sym": "T",  "on": False},
-    {"key": "trial",     "label": "Trial Chambers",   "type": ST.Trial_Chambers, "dim": "overworld", "color": "#c79a3a", "sym": "C",  "on": False},
+    # Overworld
+    {"key": "village",   "label": "Village",          "type": ST.Village,        "dim": "overworld", "color": "#d8b26e", "finder": "region",     "on": True},
+    {"key": "outpost",   "label": "Pillager Outpost", "type": ST.Outpost,        "dim": "overworld", "color": "#c0603a", "finder": "region",     "on": True},
+    {"key": "mansion",   "label": "Woodland Mansion", "type": ST.Mansion,        "dim": "overworld", "color": "#8b3a2f", "finder": "region",     "on": True},
+    {"key": "desert",    "label": "Desert Pyramid",   "type": ST.Desert_Pyramid, "dim": "overworld", "color": "#e6cf6b", "finder": "region",     "on": True},
+    {"key": "jungle",    "label": "Jungle Pyramid",   "type": ST.Jungle_Temple,  "dim": "overworld", "color": "#4a8f2f", "finder": "region",     "on": True},
+    {"key": "hut",       "label": "Swamp Hut",        "type": ST.Swamp_Hut,      "dim": "overworld", "color": "#5b7a4a", "finder": "region",     "on": True},
+    {"key": "igloo",     "label": "Igloo",            "type": ST.Igloo,          "dim": "overworld", "color": "#e8f0f4", "finder": "region",     "on": True},
+    {"key": "city",      "label": "Ancient City",     "type": ST.Ancient_City,   "dim": "overworld", "color": "#3a4a55", "finder": "region",     "on": True},
+    {"key": "stronghold","label": "Stronghold",       "type": 0,                 "dim": "overworld", "color": "#3aa06a", "finder": "stronghold", "on": True},
+    {"key": "treasure",  "label": "Buried Treasure",  "type": ST.Treasure,       "dim": "overworld", "color": "#caa24a", "finder": "region",     "on": False},
+    {"key": "trail",     "label": "Trail Ruins",      "type": ST.Trail_Ruins,    "dim": "overworld", "color": "#b08b5e", "finder": "region",     "on": False},
+    {"key": "trial",     "label": "Trial Chambers",   "type": ST.Trial_Chambers, "dim": "overworld", "color": "#c79a3a", "finder": "region",     "on": False},
+    {"key": "portal",    "label": "Ruined Portal",    "type": ST.Ruined_Portal,  "dim": "overworld", "color": "#9b59b6", "finder": "region",     "on": False},
+    {"key": "mineshaft", "label": "Mineshaft",        "type": ST.Mineshaft,      "dim": "overworld", "color": "#8a8a8a", "finder": "mineshaft",  "on": False},
+    # Underwater (overworld)
+    {"key": "monument",  "label": "Ocean Monument",   "type": ST.Monument,       "dim": "overworld", "color": "#2fb4c4", "finder": "region",     "on": True},
+    {"key": "ruin",      "label": "Ocean Ruins",      "type": ST.Ocean_Ruin,     "dim": "overworld", "color": "#3f9c8f", "finder": "region",     "on": False},
+    {"key": "shipwreck", "label": "Shipwreck",        "type": ST.Shipwreck,      "dim": "overworld", "color": "#9c7a4a", "finder": "region",     "on": False},
+    # Nether
+    {"key": "fortress",  "label": "Nether Fortress",  "type": ST.Fortress,       "dim": "nether",    "color": "#7a2323", "finder": "region",     "on": True},
+    {"key": "bastion",   "label": "Bastion Remnant",  "type": ST.Bastion,        "dim": "nether",    "color": "#4a3550", "finder": "region",     "on": True},
+    {"key": "portal_n",  "label": "Ruined Portal (Nether)", "type": ST.Ruined_Portal_N, "dim": "nether", "color": "#8e5bb0", "finder": "region", "on": False},
+    # End
+    {"key": "endcity",   "label": "End City",         "type": ST.End_City,       "dim": "end",       "color": "#b39ddb", "finder": "region",     "on": True},
 ]
 
 
@@ -287,6 +301,21 @@ def _bind(dll):
         ctypes.c_int, ctypes.c_int, ctypes.c_double, ctypes.c_double,
         ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_float)]
 
+    dll.sm_find_strongholds.restype = ctypes.c_int
+    dll.sm_find_strongholds.argtypes = [
+        ctypes.c_int, ctypes.c_uint64, ctypes.c_int, ctypes.POINTER(ctypes.c_int)]
+
+    dll.sm_find_mineshafts.restype = ctypes.c_int
+    dll.sm_find_mineshafts.argtypes = [
+        ctypes.c_int, ctypes.c_uint64, ctypes.c_int, ctypes.c_int,
+        ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+
+    dll.sm_nearest_biome.restype = ctypes.c_int
+    dll.sm_nearest_biome.argtypes = [
+        ctypes.c_int, ctypes.c_uint64, ctypes.c_int, ctypes.c_int,
+        ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int)]
+
 
 def available() -> bool:
     return _load() is not None
@@ -367,6 +396,49 @@ def biome_at(mc_label: str, seed: str, dimension: str,
     dim = DIMENSIONS.get(dimension, 0)
     return dll.sm_biome_at(version_const(mc_label), parse_seed(seed),
                            dim, int(x), int(y), int(z))
+
+
+def find_strongholds(mc_label: str, seed: str, x0, z0, x1, z1,
+                     maxout: int = 128) -> Optional[list]:
+    """Strongholds whose position falls inside the block rect."""
+    dll = _load()
+    if dll is None:
+        return None
+    out = (ctypes.c_int * (2 * maxout))()
+    n = dll.sm_find_strongholds(version_const(mc_label), parse_seed(seed), maxout, out)
+    res = []
+    for i in range(min(n, maxout)):
+        x, z = out[2 * i], out[2 * i + 1]
+        if x0 <= x <= x1 and z0 <= z <= z1:
+            res.append((x, z))
+    return res
+
+
+def find_mineshafts(mc_label: str, seed: str,
+                    x0, z0, x1, z1, maxout: int = 4096) -> Optional[list]:
+    dll = _load()
+    if dll is None:
+        return None
+    out = (ctypes.c_int * (2 * maxout))()
+    n = dll.sm_find_mineshafts(version_const(mc_label), parse_seed(seed),
+                               int(x0), int(z0), int(x1), int(z1), out, maxout)
+    if n == TOO_BROAD:
+        return TOO_BROAD
+    return [(out[2 * i], out[2 * i + 1]) for i in range(min(n, maxout))]
+
+
+def nearest_biome(mc_label: str, seed: str, dimension: str, cx: int, cz: int,
+                  biome_id: int, maxradius: int = 6000, step: int = 24,
+                  y: int = 63) -> Optional[tuple[int, int]]:
+    dll = _load()
+    if dll is None:
+        return None
+    dim = DIMENSIONS.get(dimension, 0)
+    out = (ctypes.c_int * 2)()
+    ok = dll.sm_nearest_biome(version_const(mc_label), parse_seed(seed), dim, y,
+                              int(cx), int(cz), int(biome_id),
+                              int(maxradius), int(step), out)
+    return (out[0], out[1]) if ok else None
 
 
 def get_spawn(mc_label: str, seed: str) -> Optional[tuple[int, int]]:
