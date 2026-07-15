@@ -131,8 +131,23 @@ def _grey(img: Image.Image) -> Image.Image:
     return out
 
 
-def build_icons() -> tuple[dict, dict]:
-    normal, explored = {}, {}
+def _disabled(img: Image.Image) -> Image.Image:
+    """Dim the icon and draw a red diagonal strike (turned-off state)."""
+    out = img.convert("RGBA")
+    px = out.load()
+    for y in range(S):
+        for x in range(S):
+            r, g, b, a = px[x, y]
+            if a:
+                px[x, y] = (r // 2 + 40, g // 2 + 40, b // 2 + 40, 140)
+    d = ImageDraw.Draw(out)
+    d.line([2, S - 3, S - 3, 2], fill="#e53935", width=2)
+    return out
+
+
+def build_icons() -> tuple[dict, dict, dict]:
+    """Return (normal, explored, disabled) dicts keyed by structure key."""
+    normal, explored, disabled = {}, {}, {}
     for s in STRUCTURES:
         img, d, glyph = _badge(s["color"])
         drawer = _GLYPHS.get(s["key"])
@@ -140,4 +155,5 @@ def build_icons() -> tuple[dict, dict]:
             drawer(d, glyph)
         normal[s["key"]] = img
         explored[s["key"]] = _grey(img)
-    return normal, explored
+        disabled[s["key"]] = _disabled(img)
+    return normal, explored, disabled

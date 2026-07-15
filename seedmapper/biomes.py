@@ -1,8 +1,9 @@
 """Biome background rendering, backed by the bundled cubiomes engine.
 
-Uses `engine.fill_biomes` (a single batched native call) to sample a coarse
-grid of biome ids and upscale it with nearest-neighbour. Batched sampling is
-fast enough (hundreds of thousands of samples/sec) to render sharp maps.
+Samples a coarse grid of biome ids (batched native call) and upscales it. An
+optional terrain mode hillshades the map using approximate surface heights so
+elevation/depth is visible. A depth setting chooses which Y-slice of biomes to
+show (surface, underground, or bottom).
 """
 
 from __future__ import annotations
@@ -14,9 +15,18 @@ from PIL import Image
 from . import engine
 from .colors import biome_color
 
-# Compatibility shims kept for callers/tests that referenced the old module.
 BACKEND_NAME = "cubiomes"
 parse_seed = engine.parse_seed
+
+# Depth presets: label -> Y level sampled for biomes.
+DEPTHS = [("Surface", 96), ("Underground (y=0)", 0), ("Bottom (y=-51)", -51)]
+DEPTH_LABELS = [d[0] for d in DEPTHS]
+DEFAULT_DEPTH = "Surface"
+_DEPTH_Y = {label: y for label, y in DEPTHS}
+
+
+def depth_y(label: str) -> int:
+    return _DEPTH_Y.get(label, 96)
 
 
 def try_load_backend() -> Optional[str]:
@@ -28,6 +38,8 @@ class BiomeProvider:
         self.seed = seed
         self.mc_version = mc_version
         self.dimension = dimension
+        self.depth = DEFAULT_DEPTH
+        self.terrain = False
         self._cache_key = None
         self._cache_img: Optional[Image.Image] = None
 
@@ -35,31 +47,58 @@ class BiomeProvider:
         if width < 2 or height < 2 or x1 <= x0 or z1 <= z0:
             return None
 
-        # Sample roughly one cell per 3 screen pixels, capped for speed.
         cols = max(16, min(320, int(width / 3)))
         rows = max(16, min(320, int(height / 3)))
+        y = depth_y(self.depth)
 
         key = (round(x0), round(z0), round(x1), round(z1), cols, rows,
-               self.seed, self.mc_version, self.dimension)
+               self.seed, self.mc_version, self.dimension, y, self.terrain)
         if key == self._cache_key and self._cache_img is not None:
             return self._cache_img.resize((width, height), Image.NEAREST)
 
         ids = engine.fill_biomes(self.mc_version, self.seed, self.dimension,
-                                 x0, z0, x1, z1, cols, rows)
+                                 x0, z0, x1, z1, cols, rows, y=y)
         if ids is None:
             return None
 
+        colours = [biome_color(b) for b in ids]
+
+        if self.terrain:
+            heights = engine.fill_heights(self.mc_version, self.seed,
+                                          self.dimension, x0, z0, x1, z1, cols, rows)
+            if heights:
+                colours = self._hillshade(colours, heights, cols, rows)
+
         small = Image.new("RGB", (cols, rows))
-        px = small.load()
-        idx = 0
-        for j in range(rows):
-            for i in range(cols):
-                px[i, j] = biome_color(ids[idx])
-                idx += 1
+        small.putdata(colours)
 
         self._cache_key = key
         self._cache_img = small
         return small.resize((width, height), Image.NEAREST)
+
+    @staticmethod
+    def _hillshade(colours, heights, cols, rows):
+        """Shade each cell by local slope so terrain relief is visible."""
+        out = []
+        K = 0.08
+        for j in range(rows):
+            for i in range(cols):
+                idx = j * cols + i
+                hl = heights[idx - 1] if i > 0 else heights[idx]
+                hr = heights[idx + 1] if i < cols - 1 else heights[idx]
+                hu = heights[idx - cols] if j > 0 else heights[idx]
+                hd = heights[idx + cols] if j < rows - 1 else heights[idx]
+                # Light from the north-west: down-right slopes darken.
+                slope = (hr - hl) + (hd - hu)
+                shade = 1.0 + slope * K
+                # Gentle elevation tint: high ground brightens a touch.
+                shade += (heights[idx] - 63) * 0.002
+                shade = 0.5 if shade < 0.5 else (1.6 if shade > 1.6 else shade)
+                r, g, b = colours[idx]
+                out.append((min(255, int(r * shade)),
+                            min(255, int(g * shade)),
+                            min(255, int(b * shade))))
+        return out
 
 
 def get_provider(seed: str, mc_version: str,

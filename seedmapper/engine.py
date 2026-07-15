@@ -18,7 +18,7 @@ from typing import Optional
 # Ordinals come from the vendored cubiomes biomes.h enum. Newest first.
 # --------------------------------------------------------------------------- #
 VERSION_LIST: list[tuple[str, int]] = [
-    ("1.21 (snapshot)", 28),   # MC_1_21_WD
+    ("1.21 (latest)", 28),     # MC_1_21_WD - newest the engine models
     ("1.21.3", 27),
     ("1.21.1", 26),
     ("1.20.6", 25),
@@ -206,6 +206,12 @@ def _bind(dll):
         ctypes.c_int, ctypes.c_uint64, ctypes.c_int,
         ctypes.c_int, ctypes.c_int, ctypes.c_int]
 
+    dll.sm_fill_heights.restype = ctypes.c_int
+    dll.sm_fill_heights.argtypes = [
+        ctypes.c_int, ctypes.c_uint64, ctypes.c_int,
+        ctypes.c_int, ctypes.c_int, ctypes.c_double, ctypes.c_double,
+        ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_float)]
+
 
 def available() -> bool:
     return _load() is not None
@@ -233,6 +239,24 @@ def fill_biomes(mc_label: str, seed: str, dimension: str,
     buf = (ctypes.c_int * (cols * rows))()
     dll.sm_fill_biomes(mc, sd, dim, y, int(x0), int(z0),
                        float(stepx), float(stepz), cols, rows, buf)
+    return list(buf)
+
+
+def fill_heights(mc_label: str, seed: str, dimension: str,
+                 x0: float, z0: float, x1: float, z1: float,
+                 cols: int, rows: int) -> Optional[list]:
+    """Return cols*rows approximate surface heights (blocks). 1.18+ only."""
+    dll = _load()
+    if dll is None:
+        return None
+    mc = version_const(mc_label)
+    sd = parse_seed(seed)
+    dim = DIMENSIONS.get(dimension, 0)
+    stepx = (x1 - x0) / cols
+    stepz = (z1 - z0) / rows
+    buf = (ctypes.c_float * (cols * rows))()
+    dll.sm_fill_heights(mc, sd, dim, int(x0), int(z0),
+                        float(stepx), float(stepz), cols, rows, buf)
     return list(buf)
 
 

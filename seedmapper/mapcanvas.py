@@ -348,7 +348,7 @@ class MapCanvas(tk.Frame):
     def _ensure_icons(self):
         if self._icons:
             return
-        normal, grey = icons.build_icons()
+        normal, grey, _disabled = icons.build_icons()
         self._icons = {k: ImageTk.PhotoImage(v) for k, v in normal.items()}
         self._icons_grey = {k: ImageTk.PhotoImage(v) for k, v in grey.items()}
 
@@ -371,9 +371,11 @@ class MapCanvas(tk.Frame):
                 c.create_rectangle(sx - 7, sy - 7, sx + 7, sy + 7,
                                    fill=s["color"], outline="#0b1119")
             if show_label:
-                fill = "#7f909e" if s.get("explored") else "#cfe0ee"
+                fill = "#8ea0ae" if s.get("explored") else "#e6f0f8"
+                c.create_text(sx + 14, sy + 1, anchor="w", text=s["label"],
+                              fill="#0b1119", font=("Segoe UI", 9, "bold"))
                 c.create_text(sx + 13, sy, anchor="w", text=s["label"],
-                              fill=fill, font=("Segoe UI", 7))
+                              fill=fill, font=("Segoe UI", 9, "bold"))
 
     def _draw_waypoints(self):
         c = self.canvas
@@ -386,6 +388,6 @@ class MapCanvas(tk.Frame):
             c.create_oval(sx - r, sy - r, sx + r, sy + r,
                           fill=wp.color, outline=outline, width=width)
             c.create_text(sx + r + 3, sy, anchor="w", text=wp.name,
-                          fill="#e8eef5", font=("Segoe UI", 8, "bold"))
-            c.create_text(sx + r + 3, sy + 11, anchor="w", text=f"({wp.x}, {wp.z})",
-                          fill=TEXT_COLOR, font=("Segoe UI", 7))
+                          fill="#e8eef5", font=("Segoe UI", 9, "bold"))
+            c.create_text(sx + r + 3, sy + 12, anchor="w", text=f"({wp.x}, {wp.z})",
+                          fill=TEXT_COLOR, font=("Segoe UI", 8))

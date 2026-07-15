@@ -10,9 +10,13 @@ waypoints to CSV or a nicely formatted Markdown note with a table.
 
 - 🗺️ **Grid map** in Minecraft world coordinates (+X east, +Z south) with pan & zoom
 - 🌎 **Toggleable biome layer** (Chunkbase-style) that pans and zooms *with* the grid
+- ⛰️ **Terrain shading** — hillshaded relief from approximate surface heights (1.18+)
+- 🕳️ **Depth selector** — view biomes at the Surface, Underground (y=0), or Bottom (y=-51)
 - 🏛️ **Structure finder** — villages, temples, monuments, mansions, outposts,
-  ancient cities, trial chambers and more, each with its own icon (toggle per type)
-- 🧭 **Version picker** — Minecraft **1.7 through 1.21** (including the latest snapshot)
+  ancient cities, trial chambers and more, each with its own icon. Click icons in
+  the side panel to toggle types on/off; click a structure on the map to add a
+  waypoint or mark it explored
+- 🧭 **Version picker** — Minecraft **1.7 through 1.21** (the newest cubiomes models)
 - 📍 **Custom waypoints** — name, X/Y/Z, dimension, category, colour, and notes
 - 💾 **Save/Load** your map as a `.msf` file (self-describing JSON under the hood)
 - 📤 **Export** all waypoints to **CSV** or a **Markdown note** with a table

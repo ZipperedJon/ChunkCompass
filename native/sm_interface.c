@@ -10,6 +10,7 @@
  */
 #include "generator.h"
 #include "finders.h"
+#include "biomenoise.h"
 #include <stdint.h>
 
 #if defined(_WIN32)
@@ -124,6 +125,33 @@ EXPORT int sm_find_structures(int stype, int mc, uint64_t seed, int dim,
         }
     }
     return count;
+}
+
+/* Fill out[cols*rows] with approximate Overworld surface heights (in blocks).
+ * Sample point for cell (i, j) is x = x0 + (i+0.5)*stepx, likewise z.
+ * Only meaningful for 1.18+ (noise generation). */
+EXPORT int sm_fill_heights(int mc, uint64_t seed, int dim, int x0, int z0,
+        double stepx, double stepz, int cols, int rows, float *out)
+{
+    Generator g;
+    setupGenerator(&g, mc, 0);
+    applySeed(&g, dim, seed);
+    SurfaceNoise sn;
+    initSurfaceNoise(&sn, dim, seed);
+
+    for (int j = 0; j < rows; j++)
+    {
+        int bz = (int)(z0 + (j + 0.5) * stepz);
+        for (int i = 0; i < cols; i++)
+        {
+            int bx = (int)(x0 + (i + 0.5) * stepx);
+            float y = 0.0f;
+            /* mapApproxHeight uses 1:4 horizontal scale. */
+            mapApproxHeight(&y, 0, &g, &sn, bx >> 2, bz >> 2, 1, 1);
+            out[j * cols + i] = y;
+        }
+    }
+    return 0;
 }
 
 /* Approximate world spawn (fast). Writes {x, z} to out. */

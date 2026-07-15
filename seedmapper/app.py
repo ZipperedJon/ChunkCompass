@@ -137,8 +137,10 @@ class App(tk.Tk):
         self._seed_var = tk.StringVar(value=self.project.seed)
         self._version_var = tk.StringVar(value=self.project.mc_version)
         self._biome_var = tk.BooleanVar(value=True)
+        self._terrain_var = tk.BooleanVar(value=False)
+        self._depth_var = tk.StringVar(value=biomes.DEFAULT_DEPTH)
         self._add_var = tk.BooleanVar(value=False)
-        self._structures_var = tk.BooleanVar(value=False)
+        self._structures_var = tk.BooleanVar(value=True)
         self._struct_enabled = {
             s["key"]: tk.BooleanVar(value=s["on"]) for s in engine.STRUCTURES}
 
@@ -177,13 +179,10 @@ class App(tk.Tk):
         viewmenu = tk.Menu(menubar, tearoff=0)
         viewmenu.add_checkbutton(label="Show biome layer", variable=self._biome_var,
                                  command=self._toggle_biomes)
+        viewmenu.add_checkbutton(label="Terrain shading", variable=self._terrain_var,
+                                 command=self._toggle_terrain)
         viewmenu.add_checkbutton(label="Show structures", variable=self._structures_var,
                                  command=self._toggle_structures)
-        structmenu = tk.Menu(viewmenu, tearoff=0)
-        for s in engine.STRUCTURES:
-            structmenu.add_checkbutton(label=s["label"], variable=self._struct_enabled[s["key"]],
-                                       command=self._refresh_structures)
-        viewmenu.add_cascade(label="Structure types", menu=structmenu)
         viewmenu.add_separator()
         viewmenu.add_command(label="Reset view (home)", accelerator="Ctrl+H",
                              command=lambda: self.map.go_home())
@@ -224,13 +223,20 @@ class App(tk.Tk):
             style="Toolbutton", command=self._toggle_add_mode)
         self._add_btn.pack(side="left", padx=4)
         self._biome_chk = ttk.Checkbutton(
-            bar, text="Biome layer", variable=self._biome_var,
+            bar, text="Biomes", variable=self._biome_var,
             style="Toolbutton", command=self._toggle_biomes)
         self._biome_chk.pack(side="left", padx=4)
-        self._struct_chk = ttk.Checkbutton(
-            bar, text="Structures", variable=self._structures_var,
-            style="Toolbutton", command=self._toggle_structures)
-        self._struct_chk.pack(side="left", padx=4)
+        self._terrain_chk = ttk.Checkbutton(
+            bar, text="Terrain", variable=self._terrain_var,
+            style="Toolbutton", command=self._toggle_terrain)
+        self._terrain_chk.pack(side="left", padx=4)
+
+        ttk.Label(bar, text="Depth:").pack(side="left", padx=(8, 2))
+        self._depth_combo = ttk.Combobox(
+            bar, textvariable=self._depth_var, values=biomes.DEPTH_LABELS,
+            width=16, state="readonly")
+        self._depth_combo.pack(side="left", padx=(0, 8))
+        self._depth_combo.bind("<<ComboboxSelected>>", lambda e: self._apply_depth())
 
         ttk.Button(bar, text="Spawn", command=self._goto_spawn).pack(side="left", padx=4)
         ttk.Button(bar, text="Home", command=lambda: self.map.go_home()).pack(side="left", padx=4)
@@ -274,27 +280,71 @@ class App(tk.Tk):
         self.map.on_structure_click = self._on_structure_click
 
     def _build_legend(self, parent):
-        lf = ttk.LabelFrame(parent, text="Structure icons", padding=(6, 4))
+        lf = ttk.LabelFrame(parent, text="Structures", padding=(6, 4))
         lf.pack(fill="x", pady=(10, 0))
-        self._legend_imgs = {}   # keep references alive
-        normal, _ = icons.build_icons()
+
+        top = ttk.Frame(lf)
+        top.pack(fill="x", pady=(0, 4))
+        ttk.Checkbutton(top, text="Show", variable=self._structures_var,
+                        command=self._toggle_structures).pack(side="left")
+        ttk.Button(top, text="All", width=4,
+                   command=lambda: self._set_all_structures(True)).pack(side="right", padx=1)
+        ttk.Button(top, text="None", width=5,
+                   command=lambda: self._set_all_structures(False)).pack(side="right", padx=1)
+        ttk.Label(lf, text="Click an icon to toggle it",
+                  font=("Segoe UI", 7), foreground="#7f909e").pack(anchor="w")
+
+        # Clickable icon toggles.
+        self._icon_on = {}      # key -> PhotoImage (enabled)
+        self._icon_off = {}     # key -> PhotoImage (disabled/red strike)
+        self._struct_cells = {}  # key -> (label_widget, text_widget)
+        normal, _explored, disabled = icons.build_icons()
         grid = ttk.Frame(lf)
         grid.pack(fill="x")
         for i, s in enumerate(engine.STRUCTURES):
-            photo = ImageTk.PhotoImage(normal[s["key"]])
-            self._legend_imgs[s["key"]] = photo
+            key = s["key"]
+            self._icon_on[key] = ImageTk.PhotoImage(normal[key])
+            self._icon_off[key] = ImageTk.PhotoImage(disabled[key])
             row, col = divmod(i, 2)
             cell = ttk.Frame(grid)
             cell.grid(row=row, column=col, sticky="w", padx=2, pady=1)
-            tk.Label(cell, image=photo).pack(side="left")
-            ttk.Label(cell, text=s["label"], font=("Segoe UI", 8)).pack(side="left", padx=(3, 8))
+            iconlbl = tk.Label(cell, cursor="hand2")
+            iconlbl.pack(side="left")
+            txtlbl = tk.Label(cell, text=s["label"], font=("Segoe UI", 8), cursor="hand2")
+            txtlbl.pack(side="left", padx=(3, 8))
+            iconlbl.bind("<Button-1>", lambda e, k=key: self._toggle_one_structure(k))
+            txtlbl.bind("<Button-1>", lambda e, k=key: self._toggle_one_structure(k))
+            self._struct_cells[key] = (iconlbl, txtlbl)
+            self._update_struct_cell(key)
+
+    def _update_struct_cell(self, key):
+        on = self._struct_enabled[key].get()
+        iconlbl, txtlbl = self._struct_cells[key]
+        iconlbl.config(image=self._icon_on[key] if on else self._icon_off[key])
+        txtlbl.config(foreground="#1a1a1a" if on else "#9aa6b0",
+                      font=("Segoe UI", 8, "" if on else "overstrike"))
+
+    def _toggle_one_structure(self, key):
+        self._struct_enabled[key].set(not self._struct_enabled[key].get())
+        self._update_struct_cell(key)
+        if not self._structures_var.get():
+            self._structures_var.set(True)
+        self._refresh_structures()
+
+    def _set_all_structures(self, on):
+        for s in engine.STRUCTURES:
+            self._struct_enabled[s["key"]].set(on)
+            self._update_struct_cell(s["key"])
+        self._refresh_structures()
 
     def _build_statusbar(self):
         bar = ttk.Frame(self, relief="sunken")
         bar.pack(side="bottom", fill="x")
-        ttk.Label(bar, textvariable=self._coord_var, anchor="w", width=22).pack(side="left", padx=8)
+        ttk.Label(bar, textvariable=self._coord_var, anchor="w", width=44,
+                  font=("Segoe UI", 11)).pack(side="left", padx=8)
         ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", pady=2)
-        ttk.Label(bar, textvariable=self._status_var, anchor="w").pack(side="left", padx=8)
+        ttk.Label(bar, textvariable=self._status_var, anchor="w",
+                  font=("Segoe UI", 11)).pack(side="left", padx=8)
 
     # ------------------------------------------------------------------ #
     # Engine-dependent controls
@@ -302,22 +352,46 @@ class App(tk.Tk):
     def _refresh_engine_controls(self):
         state = "normal" if self._engine_available else "disabled"
         self._biome_chk.config(state=state)
-        self._struct_chk.config(state=state)
+        self._terrain_chk.config(state=state)
+        self._depth_combo.config(state="readonly" if self._engine_available else "disabled")
         if not self._engine_available:
             self._biome_var.set(False)
+            self._terrain_var.set(False)
             self._structures_var.set(False)
             self._status_var.set(
                 "World-gen engine unavailable - running as grid + waypoint mapper. "
                 f"({engine.load_error()})")
 
+    def _make_provider(self):
+        p = biomes.get_provider(self.project.seed, self.project.mc_version)
+        if p is not None:
+            p.depth = self._depth_var.get()
+            p.terrain = self._terrain_var.get()
+        return p
+
+    def _apply_biome_layer(self):
+        if not self._engine_available:
+            return
+        self.map.set_biome_provider(self._make_provider())
+        self.map.set_biome_enabled(self._biome_var.get())
+
     def _toggle_biomes(self):
         if not self._engine_available:
             self._biome_var.set(False)
             return
-        if self._biome_var.get():
-            provider = biomes.get_provider(self.project.seed, self.project.mc_version)
-            self.map.set_biome_provider(provider)
-        self.map.set_biome_enabled(self._biome_var.get())
+        self._apply_biome_layer()
+
+    def _toggle_terrain(self):
+        if not self._engine_available:
+            self._terrain_var.set(False)
+            return
+        if self._terrain_var.get() and not self._biome_var.get():
+            self._biome_var.set(True)   # terrain shades the biome layer
+        self._apply_biome_layer()
+
+    def _apply_depth(self):
+        if self._engine_available and self._biome_var.get():
+            self._apply_biome_layer()
 
     def _toggle_structures(self):
         if not self._engine_available:
@@ -340,10 +414,7 @@ class App(tk.Tk):
         self.project.seed = seed
         self.project.mc_version = version
         self._mark_dirty()
-        if self._biome_var.get():
-            self.map.set_biome_provider(
-                biomes.get_provider(self.project.seed, self.project.mc_version))
-            self.map.set_biome_enabled(True)
+        self._apply_biome_layer()
         self._refresh_structures()
 
     def _on_view_changed(self):
