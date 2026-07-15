@@ -1,4 +1,4 @@
-"""The SeedMapper desktop application (Tkinter)."""
+"""The Chunk Compass desktop application (Tkinter)."""
 
 from __future__ import annotations
 

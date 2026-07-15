@@ -1,4 +1,4 @@
-# SeedMapper
+# Chunk Compass
 
 A desktop **Minecraft seed map with custom waypoints**. Plot points of interest
 on a pannable/zoomable grid, save your map to a `.msf` file, and export your
@@ -78,7 +78,7 @@ Pan by dragging; zoom with the mouse wheel; **Home** re-centres on (0, 0).
 
 ## Building the native engine
 
-The bundled `seedmapper/lib/cubiomes.dll` is compiled from the vendored
+The bundled `chunkcompass/lib/cubiomes.dll` is compiled from the vendored
 cubiomes source in `native/` using [ziglang](https://pypi.org/project/ziglang/)
 (a self-contained C compiler — no Visual Studio needed):
 
@@ -93,11 +93,11 @@ native code or want to rebuild it yourself.
 ## Packaging
 
 ```powershell
-.\build_exe.ps1                                  # -> dist\SeedMapper.exe
-.venv\Scripts\python.exe setup.py bdist_msi      # -> dist\SeedMapper-*.msi
+.\build_exe.ps1                                  # -> dist\ChunkCompass.exe
+.venv\Scripts\python.exe setup.py bdist_msi      # -> dist\ChunkCompass-*.msi
 ```
 
-Run `SeedMapper.exe --diag report.txt` to write a self-check confirming the
+Run `ChunkCompass.exe --diag report.txt` to write a self-check confirming the
 engine loads (useful for verifying a packaged build).
 
 ## License

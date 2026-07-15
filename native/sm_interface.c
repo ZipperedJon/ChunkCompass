@@ -1,4 +1,4 @@
-/* SeedMapper native interface over cubiomes.
+/* Chunk Compass native interface over cubiomes.
  *
  * Exposes a small, batch-friendly C API for the Python app:
  *   - sm_fill_biomes      : fill a grid of biome ids in one call (fast render)

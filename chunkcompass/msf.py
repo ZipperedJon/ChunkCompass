@@ -49,12 +49,12 @@ def load(path: str | Path) -> Project:
         raise MsfError(f"File is not valid .msf (bad JSON): {exc}") from exc
 
     if not isinstance(document, dict) or document.get("magic") != MSF_MAGIC:
-        raise MsfError("This does not look like a SeedMapper .msf file.")
+        raise MsfError("This does not look like a Chunk Compass .msf file.")
 
     version = document.get("version", 0)
     if version > MSF_VERSION:
         raise MsfError(
-            f"This file was made by a newer version of SeedMapper "
+            f"This file was made by a newer version of Chunk Compass "
             f"(file v{version}, this app supports v{MSF_VERSION})."
         )
 

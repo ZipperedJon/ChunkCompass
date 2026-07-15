@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['C:\\Users\\Jon\\Documents\\Claude Programs\\SeedMapper\\main.py'],
+    ['C:\\Users\\Jon\\Documents\\Claude Programs\\ChunkCompass\\main.py'],
     pathex=[],
     binaries=[],
-    datas=[('C:\\Users\\Jon\\Documents\\Claude Programs\\SeedMapper\\seedmapper\\lib\\cubiomes.dll', 'seedmapper/lib')],
+    datas=[('C:\\Users\\Jon\\Documents\\Claude Programs\\ChunkCompass\\chunkcompass\\lib\\cubiomes.dll', 'chunkcompass/lib')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='SeedMapper',
+    name='ChunkCompass',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

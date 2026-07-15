@@ -1,9 +1,9 @@
-"""Compile cubiomes + the SeedMapper interface into cubiomes.dll using ziglang.
+"""Compile cubiomes + the Chunk Compass interface into cubiomes.dll using ziglang.
 
 Run:  .venv\\Scripts\\python.exe native\\build_native.py
 
-The output DLL is written to seedmapper/lib/cubiomes.dll and is loaded at
-runtime by seedmapper/engine.py.
+The output DLL is written to chunkcompass/lib/cubiomes.dll and is loaded at
+runtime by chunkcompass/engine.py.
 """
 
 import glob
@@ -14,7 +14,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 CUB = os.path.join(HERE, "cubiomes")
-OUT_DIR = os.path.join(ROOT, "seedmapper", "lib")
+OUT_DIR = os.path.join(ROOT, "chunkcompass", "lib")
 OUT = os.path.join(OUT_DIR, "cubiomes.dll")
 
 

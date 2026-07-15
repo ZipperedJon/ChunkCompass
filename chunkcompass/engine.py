@@ -243,7 +243,7 @@ def _candidate_paths() -> list[str]:
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
         for n in names:
-            paths.append(os.path.join(meipass, "seedmapper", "lib", n))
+            paths.append(os.path.join(meipass, "chunkcompass", "lib", n))
             paths.append(os.path.join(meipass, "lib", n))
             paths.append(os.path.join(meipass, n))
     return paths

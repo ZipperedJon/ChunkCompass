@@ -1,7 +1,7 @@
 """Diagnostic: verify the biome backend loads when frozen by PyInstaller."""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from seedmapper import biomes
+from chunkcompass import biomes
 
 name = biomes.try_load_backend()
 print("BACKEND:", name)
