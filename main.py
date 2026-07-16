@@ -23,6 +23,12 @@ def _diag(out_path: str | None) -> None:
         vills = engine.find_structures(engine.ST.Village, "1.21.4", "12345",
                                        "overworld", -3000, -3000, 3000, 3000)
         lines.append(f"villages found (+/-3000): {len(vills) if vills not in (None, engine.TOO_BROAD) else vills}")
+    try:
+        from chunkcompass import updater
+        info = updater.get_latest(timeout=10)
+        lines.append(f"update check: latest={info['tag']} newer={updater.is_newer(info['tag'])}")
+    except Exception as exc:  # noqa: BLE001
+        lines.append(f"update check FAILED: {exc}")
     report = "\n".join(lines)
     if out_path:
         with open(out_path, "w", encoding="utf-8") as fh:

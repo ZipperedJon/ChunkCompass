@@ -70,8 +70,11 @@ class MapCanvas(tk.Frame):
         self._icons_grey: dict = {}
 
         self._drag_start = None
+        self._last_drag = None
         self._dragged = False
         self._flash = None       # (x, z) world point to highlight after a search
+        self._hover_busy = False
+        self._last_mouse = None
 
         c = self.canvas
         c.bind("<ButtonPress-1>", self._on_press)
@@ -160,6 +163,7 @@ class MapCanvas(tk.Frame):
 
     def _on_press(self, event):
         self._drag_start = (event.x, event.y, self.center_x, self.center_z)
+        self._last_drag = (event.x, event.y)
         self._dragged = False
         if self._flash is not None:
             self._flash = None
@@ -168,13 +172,18 @@ class MapCanvas(tk.Frame):
     def _on_drag(self, event):
         if not self._drag_start:
             return
-        sx, sy, cx, cz = self._drag_start
-        dx, dy = event.x - sx, event.y - sy
-        if abs(dx) > 3 or abs(dy) > 3:
+        px, py, _, _ = self._drag_start
+        lx, ly = self._last_drag
+        dx, dy = event.x - lx, event.y - ly
+        self._last_drag = (event.x, event.y)
+        if abs(event.x - px) > 3 or abs(event.y - py) > 3:
             self._dragged = True
-        self.center_x = cx - dx / self.scale
-        self.center_z = cz - dy / self.scale
-        self.redraw()
+        if dx or dy:
+            # Shift the world under the cursor and slide every existing canvas
+            # item by the same pixels - far cheaper than a full redraw per event.
+            self.center_x -= dx / self.scale
+            self.center_z -= dy / self.scale
+            self.canvas.move("all", dx, dy)
 
     def _on_release(self, event):
         was_drag = self._dragged
@@ -207,14 +216,22 @@ class MapCanvas(tk.Frame):
             self.on_edit(hit)
 
     def _on_motion(self, event):
-        x, z = self.screen_to_world(event.x, event.y)
+        # Throttle the (relatively expensive) coordinate/biome/structure hover
+        # work to at most ~20x/sec so moving the mouse stays smooth.
+        self._last_mouse = (event.x, event.y)
+        if not self._hover_busy:
+            self._hover_busy = True
+            self.after(50, self._hover_tick)
+
+    def _hover_tick(self):
+        self._hover_busy = False
+        if self._last_mouse is None:
+            return
+        mx, my = self._last_mouse
+        x, z = self.screen_to_world(mx, my)
         self.on_coords(x, z)
-        # Structure hover tooltip.
-        s = self._struct_hit_test(event.x, event.y)
-        if s:
-            self.on_hover(f"{s['label']}  ({s['x']}, {s['z']})")
-        else:
-            self.on_hover(None)
+        s = self._struct_hit_test(mx, my)
+        self.on_hover(f"{s['label']}  ({s['x']}, {s['z']})" if s else None)
 
     def _on_wheel(self, event):
         self._zoom_at(event.x, event.y, 1.2 if event.delta > 0 else 1 / 1.2)
@@ -337,12 +354,16 @@ class MapCanvas(tk.Frame):
         c = self.canvas
         step = self._nice_step()
         x0, z0, x1, z1 = self.view_bounds()
+        # Draw a bit beyond the viewport so a drag reveals pre-drawn lines.
+        padx, padz = (x1 - x0) * 0.5, (z1 - z0) * 0.5
+        x0, x1, z0, z1 = x0 - padx, x1 + padx, z0 - padz, z1 + padz
 
         gx = int(x0 // step) * step
         while gx <= x1:
             sx, _ = self.world_to_screen(gx, 0)
             major = (gx % (step * 5) == 0)
-            c.create_line(sx, 0, sx, h, fill=GRID_MAJOR_COLOR if major else GRID_COLOR)
+            c.create_line(sx, -padz, sx, h + padz,
+                          fill=GRID_MAJOR_COLOR if major else GRID_COLOR)
             if major:
                 c.create_text(sx + 2, 2, anchor="nw", text=str(gx),
                               fill=TEXT_COLOR, font=("Segoe UI", 7))
@@ -352,7 +373,8 @@ class MapCanvas(tk.Frame):
         while gz <= z1:
             _, sy = self.world_to_screen(0, gz)
             major = (gz % (step * 5) == 0)
-            c.create_line(0, sy, w, sy, fill=GRID_MAJOR_COLOR if major else GRID_COLOR)
+            c.create_line(-padx, sy, w + padx, sy,
+                          fill=GRID_MAJOR_COLOR if major else GRID_COLOR)
             if major:
                 c.create_text(2, sy + 2, anchor="nw", text=str(gz),
                               fill=TEXT_COLOR, font=("Segoe UI", 7))

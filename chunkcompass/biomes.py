@@ -48,8 +48,9 @@ class BiomeProvider:
         if width < 2 or height < 2 or x1 <= x0 or z1 <= z0:
             return None
 
-        cols = max(16, min(320, int(width / 3)))
-        rows = max(16, min(320, int(height / 3)))
+        # ~1 sample per 4 screen px (upscaled), capped for a fast render.
+        cols = max(16, min(256, int(width / 4)))
+        rows = max(16, min(256, int(height / 4)))
         y = depth_y(self.depth)
 
         hl = frozenset(self.highlight)

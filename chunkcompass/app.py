@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import os
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from PIL import ImageTk
 
-from . import __app_name__, __version__, biomes, colors, engine, exporters, icons, msf
+from . import (__app_name__, __version__, biomes, colors, engine, exporters,
+               icons, msf, updater)
 from .colors import biome_name
 from .mapcanvas import MapCanvas
 from .model import DIMENSIONS, Project, Waypoint
@@ -197,6 +200,8 @@ class App(tk.Tk):
         menubar.add_cascade(label="View", menu=viewmenu)
 
         helpmenu = tk.Menu(menubar, tearoff=0)
+        helpmenu.add_command(label="Check for updates...", command=self._check_updates)
+        helpmenu.add_separator()
         helpmenu.add_command(label="About", command=self._about)
         menubar.add_cascade(label="Help", menu=helpmenu)
 
@@ -863,6 +868,69 @@ class App(tk.Tk):
         return True
 
     def _on_close(self):
+        if self._confirm_discard():
+            self.destroy()
+
+    # ------------------------------------------------------------------ #
+    # Auto-update (checks GitHub releases)
+    # ------------------------------------------------------------------ #
+    def _check_updates(self):
+        self._status_var.set("Checking for updates...")
+
+        def work():
+            try:
+                info = updater.get_latest()
+                self.after(0, lambda: self._update_result(info, None))
+            except Exception as exc:  # noqa: BLE001
+                self.after(0, lambda e=exc: self._update_result(None, str(e)))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _update_result(self, info, err):
+        if err:
+            self._status_var.set("Update check failed.")
+            messagebox.showerror("Update check failed",
+                                 f"Could not reach GitHub:\n\n{err}")
+            return
+        tag = info["tag"]
+        if not updater.is_newer(tag):
+            self._status_var.set(f"Up to date (v{__version__}).")
+            messagebox.showinfo("Up to date",
+                                f"You're on the latest version (v{__version__}).")
+            return
+        name, url = updater.pick_installer(info["assets"])
+        if not url:
+            messagebox.showinfo(
+                "Update available",
+                f"{tag} is available, but no installer was attached.\n\n{info['url']}")
+            return
+        if messagebox.askyesno(
+                "Update available",
+                f"{tag} is available (you have v{__version__}).\n\n"
+                "Download and install it now? Chunk Compass will close so the "
+                "installer can finish."):
+            self._download_update(name, url)
+
+    def _download_update(self, name, url):
+        self._status_var.set(f"Downloading {name}...")
+
+        def work():
+            try:
+                path = updater.download(url, name)
+                self.after(0, lambda: self._run_installer(path))
+            except Exception as exc:  # noqa: BLE001
+                self.after(0, lambda e=exc: (
+                    self._status_var.set("Download failed."),
+                    messagebox.showerror("Download failed", str(e))))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _run_installer(self, path):
+        try:
+            os.startfile(path)   # noqa: S606 - launches the .msi installer
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror("Could not launch installer", str(exc))
+            return
         if self._confirm_discard():
             self.destroy()
 

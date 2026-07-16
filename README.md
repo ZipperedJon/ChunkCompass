@@ -27,6 +27,8 @@ waypoints to CSV or a nicely formatted Markdown note with a table.
 - 💾 **Save/Load** your map as a `.msf` file (self-describing JSON under the hood)
 - 📤 **Export** all waypoints to **CSV** or a **Markdown note** with a table
 - 🎯 **Go to spawn** and **Home** shortcuts
+- ⬆️ **Auto-update** — *Help → Check for updates* pulls the latest release from
+  GitHub and launches the installer
 - 🪟 Ships as a standalone Windows `.exe` and `.msi` installer
 
 The biome/structure engine is the [cubiomes](https://github.com/Cubitect/cubiomes)
