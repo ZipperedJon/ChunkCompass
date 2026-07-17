@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import threading
 import tkinter as tk
 from pathlib import Path
@@ -332,6 +333,8 @@ class App(tk.Tk):
         self.map.on_view_changed = self._on_view_changed
         self.map.on_hover = self._on_hover
         self.map.on_structure_click = self._on_structure_click
+        self.map.on_delete = self._delete_by_id
+        self.map.set_dimension(self._dim())
 
     def _build_legend(self, parent):
         lf = ttk.LabelFrame(parent, text="Structures", padding=(6, 4))
@@ -348,19 +351,29 @@ class App(tk.Tk):
         ttk.Label(lf, text="Click an icon to toggle it",
                   font=("Segoe UI", 7), foreground="#7f909e").pack(anchor="w")
 
-        # Clickable icon toggles.
+        # Build icon images once (all structures); lay out only the ones for
+        # the current dimension.
         self._icon_on = {}      # key -> PhotoImage (enabled)
         self._icon_off = {}     # key -> PhotoImage (disabled/red strike)
         self._struct_cells = {}  # key -> (label_widget, text_widget)
         normal, _explored, disabled = icons.build_icons()
-        grid = ttk.Frame(lf)
-        grid.pack(fill="x")
-        for i, s in enumerate(engine.STRUCTURES):
+        for s in engine.STRUCTURES:
+            self._icon_on[s["key"]] = ImageTk.PhotoImage(normal[s["key"]])
+            self._icon_off[s["key"]] = ImageTk.PhotoImage(disabled[s["key"]])
+        self._struct_grid = ttk.Frame(lf)
+        self._struct_grid.pack(fill="x")
+        self._populate_structures()
+
+    def _populate_structures(self):
+        for child in self._struct_grid.winfo_children():
+            child.destroy()
+        self._struct_cells = {}
+        dim = self._dim()
+        items = [s for s in engine.STRUCTURES if s["dim"] == dim]
+        for i, s in enumerate(items):
             key = s["key"]
-            self._icon_on[key] = ImageTk.PhotoImage(normal[key])
-            self._icon_off[key] = ImageTk.PhotoImage(disabled[key])
             row, col = divmod(i, 2)
-            cell = ttk.Frame(grid)
+            cell = ttk.Frame(self._struct_grid)
             cell.grid(row=row, column=col, sticky="w", padx=2, pady=1)
             iconlbl = tk.Label(cell, cursor="hand2")
             iconlbl.pack(side="left")
@@ -389,10 +402,15 @@ class App(tk.Tk):
         sb.pack(side="right", fill="y")
         self._biome_list.pack(side="left", fill="both", expand=True)
         self._biome_choice_ids = []
-        for name, bid in colors.BIOME_CHOICES:
+        self._biome_list.bind("<<ListboxSelect>>", lambda e: self._on_highlight_select())
+        self._populate_biome_list()
+
+    def _populate_biome_list(self):
+        self._biome_list.delete(0, "end")
+        self._biome_choice_ids = []
+        for name, bid in colors.biome_choices(self._dim()):
             self._biome_list.insert("end", name)
             self._biome_choice_ids.append(bid)
-        self._biome_list.bind("<<ListboxSelect>>", lambda e: self._on_highlight_select())
 
     def _on_highlight_select(self):
         sel = self._biome_list.curselection()
@@ -484,6 +502,8 @@ class App(tk.Tk):
         return min(res, key=lambda p: (p[0] - cx) ** 2 + (p[1] - cz) ** 2)
 
     def _update_struct_cell(self, key):
+        if key not in self._struct_cells:   # not shown in the current dimension
+            return
         on = self._struct_enabled[key].get()
         iconlbl, txtlbl = self._struct_cells[key]
         iconlbl.config(image=self._icon_on[key] if on else self._icon_off[key])
@@ -498,9 +518,11 @@ class App(tk.Tk):
         self._refresh_structures()
 
     def _set_all_structures(self, on):
+        # Only affects the structures shown for the current dimension.
         for s in engine.STRUCTURES:
-            self._struct_enabled[s["key"]].set(on)
-            self._update_struct_cell(s["key"])
+            if s["dim"] == self._dim():
+                self._struct_enabled[s["key"]].set(on)
+                self._update_struct_cell(s["key"])
         self._refresh_structures()
 
     def _build_statusbar(self):
@@ -540,6 +562,11 @@ class App(tk.Tk):
         return p
 
     def _change_dimension(self):
+        dim = self._dim()
+        self.map.set_dimension(dim)          # only this dimension's waypoints
+        self._populate_structures()          # dimension-specific structure list
+        self._populate_biome_list()          # dimension-specific biomes
+        self._highlight_ids = set()          # highlight ids don't carry across dims
         self._apply_biome_layer()
         self._refresh_structures()
         self._status_var.set(f"Dimension: {self._dimension_var.get()}")
@@ -742,7 +769,9 @@ class App(tk.Tk):
             self.map.set_selected(wp_id)
 
     def _delete_selected(self):
-        wp_id = self._selected_id()
+        self._delete_by_id(self._selected_id())
+
+    def _delete_by_id(self, wp_id):
         if not wp_id:
             return
         wp = self.project.get(wp_id)
@@ -754,9 +783,16 @@ class App(tk.Tk):
     def _goto_selected(self):
         wp_id = self._selected_id()
         wp = self.project.get(wp_id) if wp_id else None
-        if wp:
-            self.map.center_on(wp.x, wp.z)
-            self.map.set_selected(wp.id)
+        if not wp:
+            return
+        # Switch to the waypoint's dimension first, then centre on it.
+        if wp.dimension != self._dim():
+            label = next((k for k, v in DIMENSION_KEY.items() if v == wp.dimension),
+                         self._dimension_var.get())
+            self._dimension_var.set(label)
+            self._change_dimension()
+        self.map.center_on(wp.x, wp.z)
+        self.map.set_selected(wp.id)
 
     def _on_tree_select(self, event):
         wp_id = self._selected_id()
@@ -950,13 +986,23 @@ class App(tk.Tk):
         threading.Thread(target=work, daemon=True).start()
 
     def _run_installer(self, path):
+        # Offer to save first; cancel aborts the update.
+        if not self._confirm_discard():
+            return
+        # Launch the installer via a short delay so this app is fully closed
+        # (and its files unlocked) before msiexec starts - otherwise the MSI
+        # reports that the program is in use.
         try:
-            os.startfile(path)   # noqa: S606 - launches the .msi installer
+            cmd = f'ping 127.0.0.1 -n 3 >nul & msiexec /i "{path}"'
+            subprocess.Popen(
+                cmd, shell=True,
+                creationflags=(subprocess.DETACHED_PROCESS
+                               | subprocess.CREATE_NEW_PROCESS_GROUP))
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Could not launch installer", str(exc))
             return
-        if self._confirm_discard():
-            self.destroy()
+        self.destroy()
+        os._exit(0)   # ensure the process (and its file locks) fully exits
 
     def _about(self):
         newest = "up to 1.21" if self._engine_available else "unavailable"

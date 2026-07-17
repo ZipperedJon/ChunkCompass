@@ -121,6 +121,28 @@ for _bid, _name in sorted(BIOME_NAMES.items(), key=lambda kv: kv[1]):
     BIOME_CHOICES.append((_name, _bid))
 BIOME_NAME_TO_ID = {name.lower(): bid for name, bid in BIOME_CHOICES}
 
+# Biome ids that only generate in the Nether / End.
+NETHER_IDS = {8, 170, 171, 172, 173}
+END_IDS = {9, 40, 41, 42, 43}
+
+
+def biome_choices(dimension: str) -> list:
+    """(name, id) pairs that can appear in the given dimension."""
+    if dimension == "nether":
+        ids = NETHER_IDS
+    elif dimension == "end":
+        ids = END_IDS
+    else:  # overworld: everything that isn't Nether/End
+        ids = None
+    out = []
+    for name, bid in BIOME_CHOICES:
+        if ids is None:
+            if bid not in NETHER_IDS and bid not in END_IDS:
+                out.append((name, bid))
+        elif bid in ids:
+            out.append((name, bid))
+    return out
+
 
 def biome_id_from_name(name: str):
     return BIOME_NAME_TO_ID.get((name or "").strip().lower())

@@ -12,6 +12,7 @@ so they always stay pinned to the right spot.
 from __future__ import annotations
 
 import tkinter as tk
+from tkinter import ttk
 from typing import Callable, Optional
 
 from PIL import Image, ImageTk
@@ -49,6 +50,8 @@ class MapCanvas(tk.Frame):
         self.structures: list[dict] = []      # dicts: x, z, color, sym, label
         self.selected_id: Optional[str] = None
         self.add_mode: bool = False
+        self.dimension: str = "overworld"     # only same-dim waypoints are drawn
+        self._callout = None
 
         # Biome background state.
         self._biome_provider = None
@@ -64,6 +67,7 @@ class MapCanvas(tk.Frame):
         self.on_view_changed: Callable[[], None] = lambda: None
         self.on_hover: Callable[[Optional[str]], None] = lambda text: None
         self.on_structure_click: Callable = lambda marker, rx, ry: None
+        self.on_delete: Callable[[str], None] = lambda wp_id: None
 
         # Structure icon images (built lazily; needs a live Tk root).
         self._icons: dict = {}
@@ -120,6 +124,14 @@ class MapCanvas(tk.Frame):
         self.structures = structures
         self.redraw()
 
+    def set_dimension(self, dimension: str) -> None:
+        self.dimension = dimension
+        self._clear_callout()
+        self.redraw()
+
+    def _visible_waypoints(self):
+        return [w for w in self.waypoints if w.dimension == self.dimension]
+
     def set_selected(self, wp_id: Optional[str]) -> None:
         self.selected_id = wp_id
         self.redraw()
@@ -165,6 +177,7 @@ class MapCanvas(tk.Frame):
         self._drag_start = (event.x, event.y, self.center_x, self.center_z)
         self._last_drag = (event.x, event.y)
         self._dragged = False
+        self._clear_callout()
         if self._flash is not None:
             self._flash = None
             self.redraw()
@@ -200,6 +213,9 @@ class MapCanvas(tk.Frame):
             self.selected_id = hit
             self.on_select(hit)
             self.redraw()
+            wp = next((w for w in self.waypoints if w.id == hit), None)
+            if wp is not None:
+                self._show_callout(wp)
             return
         marker = self._struct_hit_test(event.x, event.y)
         if marker:
@@ -247,7 +263,7 @@ class MapCanvas(tk.Frame):
 
     def _hit_test(self, sx, sy, radius=10) -> Optional[str]:
         best, best_d2 = None, radius * radius
-        for wp in self.waypoints:
+        for wp in self._visible_waypoints():
             px, py = self.world_to_screen(wp.x, wp.z)
             d2 = (px - sx) ** 2 + (py - sy) ** 2
             if d2 <= best_d2:
@@ -280,6 +296,9 @@ class MapCanvas(tk.Frame):
         self.redraw()
 
     def _render_biome(self):
+        if not (self._biome_enabled and self._biome_provider):
+            self._bg = None
+            return
         w, h = self._size()
         wv, hv = w / self.scale, h / self.scale
         ex0 = self.center_x - wv * (0.5 + BIOME_MARGIN)
@@ -288,9 +307,11 @@ class MapCanvas(tk.Frame):
         ez1 = self.center_z + hv * (0.5 + BIOME_MARGIN)
         pw = max(2, int(w * (1 + 2 * BIOME_MARGIN)))
         ph = max(2, int(h * (1 + 2 * BIOME_MARGIN)))
+        # The cache makes revisits (waypoints, back-and-forth) near-instant; a
+        # first-time area costs one quick generation.
         try:
             pil = self._biome_provider.render(ex0, ez0, ex1, ez1, pw, ph)
-        except Exception:
+        except Exception:  # noqa: BLE001
             pil = None
         if pil is None:
             self._bg = None
@@ -307,6 +328,7 @@ class MapCanvas(tk.Frame):
     # ------------------------------------------------------------------ #
     def redraw(self):
         c = self.canvas
+        self._clear_callout()
         c.delete("all")
         w, h = self._size()
         self._draw_biome(w, h)
@@ -314,6 +336,54 @@ class MapCanvas(tk.Frame):
         self._draw_structures()
         self._draw_waypoints()
         self._draw_flash()
+
+    # ------------------------------------------------------------------ #
+    # Waypoint callout (interactive popup)
+    # ------------------------------------------------------------------ #
+    def _clear_callout(self):
+        if not self._callout:
+            return
+        win, frame, ptr = self._callout
+        for item in (win, ptr):
+            try:
+                self.canvas.delete(item)
+            except tk.TclError:
+                pass
+        try:
+            frame.destroy()
+        except tk.TclError:
+            pass
+        self._callout = None
+
+    def _show_callout(self, wp):
+        self._clear_callout()
+        sx, sy = self.world_to_screen(wp.x, wp.z)
+        frame = ttk.Frame(self.canvas, relief="solid", borderwidth=1, padding=(8, 6))
+        ttk.Label(frame, text=wp.name, font=("Segoe UI", 10, "bold")).grid(
+            row=0, column=0, columnspan=3, sticky="w")
+        coord = f"X {wp.x}     Z {wp.z}"
+        if wp.y is not None:
+            coord += f"     Y {wp.y}"
+        ttk.Label(frame, text=coord, font=("Segoe UI", 9)).grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(0, 4))
+        nextrow = 2
+        if wp.category:
+            ttk.Label(frame, text=wp.category, font=("Segoe UI", 8),
+                      foreground="#3a6ea5").grid(row=2, column=0, columnspan=3, sticky="w")
+            nextrow = 3
+        ttk.Button(frame, text="Edit", width=6,
+                   command=lambda: (self._clear_callout(), self.on_edit(wp.id))
+                   ).grid(row=nextrow, column=0, padx=1, pady=(4, 0))
+        ttk.Button(frame, text="Delete", width=7,
+                   command=lambda: (self._clear_callout(), self.on_delete(wp.id))
+                   ).grid(row=nextrow, column=1, padx=1, pady=(4, 0))
+        ttk.Button(frame, text="✕", width=2, command=self._clear_callout
+                   ).grid(row=nextrow, column=2, padx=1, pady=(4, 0))
+        # Pointer from the waypoint up to the box, then the box itself.
+        ptr = self.canvas.create_line(sx, sy, sx + 16, sy - 16,
+                                      fill=SELECT_COLOR, width=2)
+        win = self.canvas.create_window(sx + 16, sy - 16, window=frame, anchor="sw")
+        self._callout = (win, frame, ptr)
 
     def _draw_flash(self):
         if self._flash is None:
@@ -418,7 +488,7 @@ class MapCanvas(tk.Frame):
 
     def _draw_waypoints(self):
         c = self.canvas
-        for wp in self.waypoints:
+        for wp in self._visible_waypoints():
             sx, sy = self.world_to_screen(wp.x, wp.z)
             selected = (wp.id == self.selected_id)
             r = 6 if selected else 5

@@ -12,21 +12,22 @@ from typing import Optional
 
 from PIL import Image
 
-from . import engine
+from . import cache, engine
 from .colors import biome_color
 
 BACKEND_NAME = "cubiomes"
 parse_seed = engine.parse_seed
 
-# Depth presets: label -> Y level sampled for biomes.
-DEPTHS = [("Surface", 96), ("Underground (y=0)", 0), ("Bottom (y=-51)", -51)]
+# Depth presets: label -> Y level sampled for biomes. (MC 1.18+ has 3D biomes;
+# underground is mostly the surface biome with cave-biome pockets.)
+DEPTHS = [("Surface", 90), ("Underground (caves)", 16), ("Bottom (y=-51)", -51)]
 DEPTH_LABELS = [d[0] for d in DEPTHS]
 DEFAULT_DEPTH = "Surface"
 _DEPTH_Y = {label: y for label, y in DEPTHS}
 
 
 def depth_y(label: str) -> int:
-    return _DEPTH_Y.get(label, 96)
+    return _DEPTH_Y.get(label, 90)
 
 
 def try_load_backend() -> Optional[str]:
@@ -41,8 +42,6 @@ class BiomeProvider:
         self.depth = DEFAULT_DEPTH
         self.terrain = False
         self.highlight: set = set()   # biome ids to highlight (others dimmed)
-        self._cache_key = None
-        self._cache_img: Optional[Image.Image] = None
 
     def render(self, x0, z0, x1, z1, width, height):
         if width < 2 or height < 2 or x1 <= x0 or z1 <= z0:
@@ -53,11 +52,13 @@ class BiomeProvider:
         rows = max(16, min(256, int(height / 4)))
         y = depth_y(self.depth)
 
-        hl = frozenset(self.highlight)
-        key = (round(x0), round(z0), round(x1), round(z1), cols, rows,
-               self.seed, self.mc_version, self.dimension, y, self.terrain, hl)
-        if key == self._cache_key and self._cache_img is not None:
-            return self._cache_img.resize((width, height), Image.NEAREST)
+        hl = tuple(sorted(self.highlight))
+        key = cache.key_hash((round(x0), round(z0), round(x1), round(z1), cols, rows,
+                              self.seed, self.mc_version, self.dimension, y,
+                              self.terrain, hl))
+        cached = cache.get(key)
+        if cached is not None:
+            return cached.resize((width, height), Image.NEAREST)
 
         ids = engine.fill_biomes(self.mc_version, self.seed, self.dimension,
                                  x0, z0, x1, z1, cols, rows, y=y)
@@ -85,8 +86,7 @@ class BiomeProvider:
         small = Image.new("RGB", (cols, rows))
         small.putdata(colours)
 
-        self._cache_key = key
-        self._cache_img = small
+        cache.put(key, small)
         return small.resize((width, height), Image.NEAREST)
 
     @staticmethod

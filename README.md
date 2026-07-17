@@ -23,7 +23,11 @@ waypoints to CSV or a nicely formatted Markdown note with a table.
 - ✨ **Biome highlight** — multi-select biomes to spotlight them (others dimmed)
 - 🧭 **Version picker** — Minecraft **Beta 1.7 through the latest** (newer than
   1.21.4 uses that generation, since world-gen has been stable since 1.18)
-- 📍 **Custom waypoints** — name, X/Y/Z, dimension, category, colour, and notes
+- 📍 **Custom waypoints** — name, X/Y/Z, dimension, category, colour, and notes;
+  click one on the map for an info popup with Edit/Delete. Only the current
+  dimension's waypoints/structures/biomes are shown; "Go to" switches dimension.
+- ⚡ **World cache** — generated areas are cached (memory + disk) so revisiting a
+  waypoint or panning back is near-instant
 - 💾 **Save/Load** your map as a `.msf` file (self-describing JSON under the hood)
 - 📤 **Export** all waypoints to **CSV** or a **Markdown note** with a table
 - 🎯 **Go to spawn** and **Home** shortcuts
